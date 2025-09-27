@@ -147,7 +147,7 @@ static doublereal c_b55 = 1.;
 /*                 the soil) radiation */
 /*                (Ro_1 = Ro_1_c + Ro_1_s) */
 /*       Ro_mult = multiple scattering */
-/* transfer paramater to common / / parameter struture */
+/* transfer parameter to common / / parameter struture */
 /*<          ild=pild >*/
     p_1.ild = *pild;
 /*<          Xlt=pXlt >*/

@@ -49,7 +49,7 @@ c       Ro_1_s  = uncollided by the leaves (or singly scattered by
 c                 the soil) radiation
 c                (Ro_1 = Ro_1_c + Ro_1_s)
 c       Ro_mult = multiple scattering
-c transfer paramater to common / / parameter struture
+c transfer parameter to common / / parameter struture
          ild=pild
          Xlt=pXlt
          Rl=pRl

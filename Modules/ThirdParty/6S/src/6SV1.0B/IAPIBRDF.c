@@ -145,7 +145,7 @@ static doublereal c_b53 = 1.;
 /*                 the soil) radiation */
 /*                (Ro_1 = Ro_1_c + Ro_1_s) */
 /*       Ro_mult = multiple scattering */
-/* transfer paramater to common / / parameter struture */
+/* transfer parameter to common / / parameter struture */
 /*<          ild=pild >*/
     /* Parameter adjustments */
     rm_offset = -(*mu);
