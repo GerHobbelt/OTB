@@ -458,7 +458,6 @@ void DimapMetadataHelper::ParseSpot5Model(const MetadataSupplierInterface & mds,
 
 }
 
-} // end namespace otb
 void DimapMetadataHelper::ParseDimapV3(const MetadataSupplierInterface & mds, const std::string & prefix)
 {
   std::vector<std::string> missionVec;
@@ -471,8 +470,17 @@ void DimapMetadataHelper::ParseDimapV3(const MetadataSupplierInterface & mds, co
                   ,"Strip_Source.MISSION_INDEX", missionIndexVec);
   m_Data.missionIndex = missionIndexVec[0];
 
-  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
-                     "BAND_ID", m_Data.BandIDs);
+  try
+  {
+    ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
+                    "BAND_ID", m_Data.BandIDs);
+  }
+  catch(const std::exception& e)
+  {
+    // try other tag path (PNEO pan-sharpened)
+    ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Instrument_Calibration.Band_Measurement_List.Band_Radiance",
+                    "BAND_ID", m_Data.BandIDs);
+  }
 
   ParseVector(mds, prefix + "Geometric_Data.Use_Area.Located_Geometric_Values",
                      "Solar_Incidences.SUN_ELEVATION", m_Data.SunElevation);
@@ -495,14 +503,41 @@ void DimapMetadataHelper::ParseDimapV3(const MetadataSupplierInterface & mds, co
   ParseVector(mds, prefix + "Geometric_Data.Use_Area.Located_Geometric_Values",
                      "Acquisition_Angles.AZIMUTH_ANGLE", m_Data.AzimuthAngle);
 
-  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
+  try
+  {
+    ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
                      "BIAS", m_Data.PhysicalBias);
+  }
+  catch(const std::exception& e)
+  {
+    // try other tag path (PNEO pan-sharpened)
+    ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Instrument_Calibration.Band_Measurement_List.Band_Radiance",
+                     "BIAS", m_Data.PhysicalBias);
+  }
 
-  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
+  try
+  {
+    ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
                      "GAIN", m_Data.PhysicalGain);
-
-  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Solar_Irradiance",
+  }
+  catch(const std::exception& e)
+  {
+    // try other tag path (PNEO pan-sharpened)
+    ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Instrument_Calibration.Band_Measurement_List.Band_Radiance",
+                     "GAIN", m_Data.PhysicalGain);
+  }
+  
+  try
+  {
+    ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Solar_Irradiance",
                      "VALUE" , m_Data.SolarIrradiance);
+  }
+  catch(const std::exception& e)
+  {
+    // try other tag path (PNEO pan-sharpened)
+    ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Instrument_Calibration.Band_Measurement_List.Band_Solar_Irradiance",
+                     "VALUE" , m_Data.SolarIrradiance);
+  }
 
   ParseVector(mds, prefix + "Geometric_Data.Use_Area.Located_Geometric_Values",
                      "Acquisition_Angles.AZIMUTH_ANGLE" , m_Data.SceneOrientation);
@@ -529,16 +564,14 @@ void DimapMetadataHelper::ParseDimapV3(const MetadataSupplierInterface & mds, co
     m_Data.TimeRangeStart = mds.GetAs<std::string>(prefix + "Geometric_Data.Refined_Model.Time.Time_Range.START");
     m_Data.TimeRangeEnd = mds.GetAs<std::string>(prefix + "Geometric_Data.Refined_Model.Time.Time_Range.END");
     m_Data.LinePeriod = mds.GetAs<std::string>(prefix +"Geometric_Data.Refined_Model.Time.Time_Stamp.LINE_PERIOD");
-    // m_Data.SwathFirstCol = mds.GetAs<std::string>(prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration.Swath_Range.FIRST_COL");
-    // m_Data.SwathLastCol = mds.GetAs<std::string>(prefix +  "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration.Swath_Range.LAST_COL");
-    std::vector<std::string> swathRangeLastCol={};
-    ParseVector(mds, prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration",
-                     "Swath_Range.LAST_COL", swathRangeLastCol);
-    m_Data.SwathLastCol = swathRangeLastCol[0];
-    std::vector<std::string> swathRangeFirstCol={};
-    ParseVector(mds, prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration",
-                     "Swath_Range.FIRST_COL", swathRangeFirstCol);
-    m_Data.SwathFirstCol = swathRangeFirstCol[0];
+    // std::vector<std::string> swathRangeLastCol={};
+    // ParseVector(mds, prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration",
+    //                  "Swath_Range.LAST_COL", swathRangeLastCol);
+    // m_Data.SwathLastCol = swathRangeLastCol[0];
+    // std::vector<std::string> swathRangeFirstCol={};
+    // ParseVector(mds, prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration",
+    //                  "Swath_Range.FIRST_COL", swathRangeFirstCol);
+    // m_Data.SwathFirstCol = swathRangeFirstCol[0];
 
   }
 
@@ -555,17 +588,24 @@ void DimapMetadataHelper::ParseDimapV3(const MetadataSupplierInterface & mds, co
   ParseVector(mds, prefix + "Dataset_Content.Dataset_Components.Component"
                   ,"COMPONENT_PATH.href", componentPath);
 
-  int i=0;
-  bool noLUT=true;//check if the LUT are available or not
-  for(std::string content:componentContent)
+  if (componentPath.size() != componentContent.size())
   {
-    if(content=="Look Up Table")
+    throw std::out_of_range("componentContent and componentContent vector"
+                            " must have the same size");
+  }
+
+  std::size_t i = 0;
+  bool noLUT = true;//check if the LUT are available or not*
+
+  for(std::string const& content:componentContent)
+  {
+    if(content == "Look Up Table")
     {
-      if(i<componentPath.size())
+      if( i < componentPath.size())
         m_Data.LUTFileNames.push_back(componentPath[i]);
       noLUT=false;
     }
-    i++;
+    ++i;
   }
   //get the bound range of the band to compute LUT if the LUTs are not available
   if(noLUT)
@@ -600,26 +640,39 @@ void DimapMetadataHelper::ParseLUT(const MetadataSupplierInterface & mds)
   std::vector<std::string> lutId;
   ParseVector(mds, "Dimap_Document.Raster_Data.Raster_Index_List.Raster_Index",
                      "BAND_ID",lutId);
-  for(int i=0;i<lutId.size();i++)
+
+  if (lutId.size() != lutData.size())
+    throw std::out_of_range("lutId and lutData vector must have the same size");
+
+  for(std::size_t i=0;i<lutId.size();i++)
   {
-    m_Data.LUTs.insert(std::make_pair(lutId[i], parseLUTStringToArrays(lutData[i])));
+    m_Data.LUTs.emplace(lutId[i], parseLUTStringToArrays(lutData[i]));
   }
 }
 
 void DimapMetadataHelper::createDefaultLUTs()
 {
-    for(int i=0;i<m_Data.BandIDs.size();i++)
+  if (m_Data.RangeMin.size() != m_Data.BandIDs.size())
+  {
+    throw std::length_error("m_Data.RangeMin and m_Data.BandIDs must have"
+                            " the same size. File is corrupted");
+  }
+  if (m_Data.RangeMax.size() != m_Data.BandIDs.size())
+  {
+    throw std::length_error("m_Data.RangeMax and m_Data.BandIDs must have"
+                            " the same size. File is corrupted");
+  }
+
+  for(std::size_t i = 0; i < m_Data.BandIDs.size(); ++i)
+  {
+    std::vector<double> vectLut(256, 0.0); // use default list initializer
+
+    for(std::size_t x = 0; x < 256 ; ++x)
     {
-      std::vector<double> vectLut(256,0.0);
-      if(m_Data.RangeMin.size() == m_Data.BandIDs.size() && m_Data.RangeMax.size() == m_Data.BandIDs.size())
-      {
-        for(int x=0;x<256;x++)
-        {
-          vectLut[x] = x * double(m_Data.RangeMax[i]- m_Data.RangeMin[i]) / 255.0 + m_Data.RangeMin[i];
-        }
-      }
-      m_Data.LUTs.emplace(m_Data.BandIDs[i], move(vectLut));
+      vectLut[x] = x * double(m_Data.RangeMax[i]- m_Data.RangeMin[i]) / 255.0 + m_Data.RangeMin[i];
     }
+    m_Data.LUTs.emplace(m_Data.BandIDs[i], move(vectLut));
+  }
 }
 
 } // end namespace otb
