@@ -471,7 +471,7 @@ void DimapMetadataHelper::ParseDimapV3(const MetadataSupplierInterface & mds, co
                   ,"Strip_Source.MISSION_INDEX", missionIndexVec);
   m_Data.missionIndex = missionIndexVec[0];
 
-  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Instrument_Calibration.Band_Measurement_List.Band_Radiance",
+  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
                      "BAND_ID", m_Data.BandIDs);
 
   ParseVector(mds, prefix + "Geometric_Data.Use_Area.Located_Geometric_Values",
@@ -495,14 +495,13 @@ void DimapMetadataHelper::ParseDimapV3(const MetadataSupplierInterface & mds, co
   ParseVector(mds, prefix + "Geometric_Data.Use_Area.Located_Geometric_Values",
                      "Acquisition_Angles.AZIMUTH_ANGLE", m_Data.AzimuthAngle);
 
-  std::vector<double> gainbiasUnavail={};
-  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Instrument_Calibration.Band_Measurement_List.Band_Radiance",
-                     "BIAS", m_Data.PhysicalBias,gainbiasUnavail);
+  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
+                     "BIAS", m_Data.PhysicalBias);
 
-  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Instrument_Calibration.Band_Measurement_List.Band_Radiance",
-                     "GAIN", m_Data.PhysicalGain,gainbiasUnavail);
+  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Radiance",
+                     "GAIN", m_Data.PhysicalGain);
 
-  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Instrument_Calibration.Band_Measurement_List.Band_Solar_Irradiance",
+  ParseVector(mds, prefix + "Radiometric_Data.Radiometric_Calibration.Band_Solar_Irradiance",
                      "VALUE" , m_Data.SolarIrradiance);
 
   ParseVector(mds, prefix + "Geometric_Data.Use_Area.Located_Geometric_Values",
@@ -519,23 +518,108 @@ void DimapMetadataHelper::ParseDimapV3(const MetadataSupplierInterface & mds, co
   auto imagingTime = GetSingleValueFromList<std::string>(mds, prefix + "Dataset_Sources.Source_Identification", "Strip_Source.IMAGING_TIME" );
   m_Data.AcquisitionDate = imagingDate + "T" + imagingTime;
 
-  m_Data.Instrument = GetSingleValueFromList<std::string>(mds, prefix + "Dataset_Sources.Source_Identification", "Strip_Source.INSTRUMENT" );
-  m_Data.InstrumentIndex = GetSingleValueFromList<std::string>(mds, prefix + "Dataset_Sources.Source_Identification", "Strip_Source.INSTRUMENT_INDEX" );
-
   m_Data.ProcessingLevel = mds.GetAs<std::string>
     (prefix + "Processing_Information.Product_Settings.PROCESSING_LEVEL");
   m_Data.SpectralProcessing = mds.GetAs<std::string>
     (prefix + "Processing_Information.Product_Settings.SPECTRAL_PROCESSING");
 
   // These metadata are specific to PHR sensor products
-  if (m_Data.mission == "PHRNEO" && m_Data.ProcessingLevel == "SENSOR")
+  if (m_Data.mission == "PNEO" && m_Data.ProcessingLevel == "SENSOR")
   {
     m_Data.TimeRangeStart = mds.GetAs<std::string>(prefix + "Geometric_Data.Refined_Model.Time.Time_Range.START");
     m_Data.TimeRangeEnd = mds.GetAs<std::string>(prefix + "Geometric_Data.Refined_Model.Time.Time_Range.END");
     m_Data.LinePeriod = mds.GetAs<std::string>(prefix +"Geometric_Data.Refined_Model.Time.Time_Stamp.LINE_PERIOD");
-    m_Data.SwathFirstCol = mds.GetAs<std::string>(prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Swath_Range.FIRST_COL");
-    m_Data.SwathLastCol = mds.GetAs<std::string>(prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Swath_Range.LAST_COL");
+    // m_Data.SwathFirstCol = mds.GetAs<std::string>(prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration.Swath_Range.FIRST_COL");
+    // m_Data.SwathLastCol = mds.GetAs<std::string>(prefix +  "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration.Swath_Range.LAST_COL");
+    std::vector<std::string> swathRangeLastCol={};
+    ParseVector(mds, prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration",
+                     "Swath_Range.LAST_COL", swathRangeLastCol);
+    m_Data.SwathLastCol = swathRangeLastCol[0];
+    std::vector<std::string> swathRangeFirstCol={};
+    ParseVector(mds, prefix + "Geometric_Data.Refined_Model.Geometric_Calibration.Instrument_Calibration.Band_Calibration_List.Band_Calibration",
+                     "Swath_Range.FIRST_COL", swathRangeFirstCol);
+    m_Data.SwathFirstCol = swathRangeFirstCol[0];
+
   }
+
+  //get LUT filenames
+  std::vector<std::string> componentContent;
+  ParseVector(mds, prefix + "Dataset_Content.Dataset_Components.Component"
+                  ,"COMPONENT_CONTENT", componentContent);
+
+  std::vector<std::string> componentType;
+  ParseVector(mds, prefix + "Dataset_Content.Dataset_Components.Component"
+                  ,"COMPONENT_TYPE", componentType);
+
+  std::vector<std::string> componentPath;
+  ParseVector(mds, prefix + "Dataset_Content.Dataset_Components.Component"
+                  ,"COMPONENT_PATH.href", componentPath);
+
+  int i=0;
+  bool noLUT=true;//check if the LUT are available or not
+  for(std::string content:componentContent)
+  {
+    if(content=="Look Up Table")
+    {
+      if(i<componentPath.size())
+        m_Data.LUTFileNames.push_back(componentPath[i]);
+      noLUT=false;
+    }
+    i++;
+  }
+  //get the bound range of the band to compute LUT if the LUTs are not available
+  if(noLUT)
+  {
+    ParseVector(mds, prefix + "Radiometric_Data.Histogram_Band_List.Histogram_Band",
+                     "MIN", m_Data.RangeMin);
+    ParseVector(mds, prefix + "Radiometric_Data.Histogram_Band_List.Histogram_Band",
+                     "MAX", m_Data.RangeMax);
+  }
+}
+
+std::vector<double> DimapMetadataHelper::parseLUTStringToArrays(std::string const & s) {
+    std::vector<double> result;
+    std::stringstream ss (s);
+    std::string item;
+
+    while (std::getline (ss, item, ',')) {
+        int index = item.find_first_of(":");
+        std::string strValue = item.substr(0,index);
+        result.push_back(std::stod(item));
+    }
+
+    return result;
+}
+
+
+void DimapMetadataHelper::ParseLUT(const MetadataSupplierInterface & mds)
+{
+  std::vector<std::string> lutData;
+  ParseVector(mds, "Dimap_Document.Raster_Data.Raster_Index_List.Raster_Index",
+                     "LUT",lutData);
+  std::vector<std::string> lutId;
+  ParseVector(mds, "Dimap_Document.Raster_Data.Raster_Index_List.Raster_Index",
+                     "BAND_ID",lutId);
+  for(int i=0;i<lutId.size();i++)
+  {
+    m_Data.LUTs.insert(std::make_pair(lutId[i], parseLUTStringToArrays(lutData[i])));
+  }
+}
+
+void DimapMetadataHelper::createDefaultLUTs()
+{
+    for(int i=0;i<m_Data.BandIDs.size();i++)
+    {
+      std::vector<double> vectLut(256,0.0);
+      if(m_Data.RangeMin.size() == m_Data.BandIDs.size() && m_Data.RangeMax.size() == m_Data.BandIDs.size())
+      {
+        for(int x=0;x<256;x++)
+        {
+          vectLut[x] = x * double(m_Data.RangeMax[i]- m_Data.RangeMin[i]) / 255.0 + m_Data.RangeMin[i];
+        }
+      }
+      m_Data.LUTs.emplace(m_Data.BandIDs[i], move(vectLut));
+    }
 }
 
 } // end namespace otb

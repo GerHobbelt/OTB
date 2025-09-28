@@ -26,7 +26,6 @@
 #include "otbGeometryMetadata.h"
 #include "otbStringUtils.h"
 
-#include "otbDimapMetadataHelper.h"
 
 // useful constants
 #include <otbMath.h>
@@ -37,23 +36,16 @@
 
 namespace otb
 {
-using boost::lexical_cast;
 using boost::bad_lexical_cast;
+using boost::lexical_cast;
 
-PleiadesNeoImageMetadataInterface::PleiadesNeoImageMetadataInterface()
+void PleiadesNeoImageMetadataInterface::FetchSatAngles(const std::vector<double>& incidenceAngles, const std::vector<double>& alongTrackIncidenceAngles,
+                                                       const std::vector<double>& acrossTrackIncidenceAngles, const std::vector<double>& sceneOrientation,
+                                                       ImageMetadata& imd)
 {
-}
-
-void PleiadesNeoImageMetadataInterface::FetchSatAngles(
-                    const std::vector<double> & incidenceAngles,
-                    const std::vector<double> & alongTrackIncidenceAngles,
-                    const std::vector<double> & acrossTrackIncidenceAngles,
-                    const std::vector<double> & sceneOrientation,
-                    ImageMetadata& imd)
-{
-  if(incidenceAngles.size() != 3 ||  sceneOrientation.size() != 3)
+  if (incidenceAngles.size() != 3 || sceneOrientation.size() != 3)
   {
-    otbGenericExceptionMacro(MissingMetadataException,<<"Missing satellite angles in Dimap")
+    otbGenericExceptionMacro(MissingMetadataException, << "Missing satellite angles in Dimap")
   }
 
   // Convention use in input of atmospheric correction parameters computation is
@@ -62,8 +54,7 @@ void PleiadesNeoImageMetadataInterface::FetchSatAngles(
   // as input for 6S. The second value is used (center value)
   imd.Add(MDNum::SatElevation, 90. - incidenceAngles[1]);
 
-  if (alongTrackIncidenceAngles.size() != 3 ||
-      acrossTrackIncidenceAngles.size() != 3)
+  if (alongTrackIncidenceAngles.size() != 3 || acrossTrackIncidenceAngles.size() != 3)
   {
     // Use only orientation if across/along track incidence are not available
     imd.Add(MDNum::SatAzimuth, sceneOrientation[1]);
@@ -71,89 +62,63 @@ void PleiadesNeoImageMetadataInterface::FetchSatAngles(
   else
   {
     // Use center values
-    auto cap = sceneOrientation[1];
+    auto cap   = sceneOrientation[1];
     auto along = alongTrackIncidenceAngles[1];
     auto ortho = acrossTrackIncidenceAngles[1];
-  
-    auto satAzimuth =  (cap - std::atan2(std::tan(ortho * CONST_PI_180), 
-                                        std::tan(along * CONST_PI_180)) 
-                          * CONST_180_PI);
+
+    auto satAzimuth = (cap - std::atan2(std::tan(ortho * CONST_PI_180), std::tan(along * CONST_PI_180)) * CONST_180_PI);
 
     imd.Add(MDNum::SatAzimuth, fmod(satAzimuth, 360));
-
   }
 }
 
-void PleiadesNeoImageMetadataInterface::FetchTabulatedPhysicalGain(ImageMetadata& imd)
+void PleiadesNeoImageMetadataInterface::FetchSpectralSensitivity(const std::string& sensorId, ImageMetadata& imd, DimapMetadataHelper& helper)
 {
-  std::unordered_map<std::string, double> bandNameToPhysicalGain;
-  // TODO check band order here.
-  const auto &  sensorId = imd[MDStr::SensorID];
-  if (sensorId == "PHRNEO" || sensorId == "PNEO3" || sensorId == "PNEO4" || sensorId == "PNEO5" || sensorId == "PNEO6")
+  otb::MetaData::LUT1D spectralSensitivity;
+  spectralSensitivity.Axis[0].Origin  = 0.0;
+  spectralSensitivity.Axis[0].Spacing = 1.0;
+  spectralSensitivity.Axis[0].Size    = 255;
+  std::string ProductFilePath         = itksys::SystemTools::GetParentDirectory(m_MetadataSupplierInterface->GetResourceFile()) + "/";
+  if(helper.GetDimapData().LUTFileNames.size()>0){
+    for (std::string const& lutPath : helper.GetDimapData().LUTFileNames)
+    {
+      if (itksys::SystemTools::FileExists(ProductFilePath + lutPath))
+      {
+        XMLMetadataSupplier xmlLut(ProductFilePath + lutPath);
+        helper.ParseLUT(xmlLut);
+      }
+    }
+  }
+  else// TODO add default LUT according to the type of image RGB or NED
   {
-      bandNameToPhysicalGain = { {"P", 7.996},
-          {"B5", 8.039}, {"B1", 6.600}, {"B2", 7.338}, {"B3", 8.132}, {"B6",9.955}, {"B4", 12.089}};
-  }else
-  {
-    otbGenericExceptionMacro(MissingMetadataException, << "Invalid metadata, bad sensor id");
+    helper.createDefaultLUTs();
   }
 
-  for (auto & band: imd.Bands)
+  if (sensorId.find("NEO") != std::string::npos)
   {
-    auto gain = bandNameToPhysicalGain.find(band[MDStr::BandName]);
-    if (gain ==  bandNameToPhysicalGain.end())
+    for (auto& band : imd.Bands)
     {
-      otbGenericExceptionMacro(MissingMetadataException, << "Cannot find the physical gain associated with " << band[MDStr::BandName]);
+      auto SpectralSensitivityIt = (helper.GetDimapData().LUTs).find(band[MDStr::BandName]);
+      if (SpectralSensitivityIt != (helper.GetDimapData().LUTs).end())
+      {
+        spectralSensitivity.Array = SpectralSensitivityIt->second;
+        band.Add(MDL1D::SpectralSensitivity, spectralSensitivity);
+      }
     }
-    else
-    {
-      band.Add(MDNum::PhysicalGain, gain->second);
-    }
+  }
+  else
+  {
+    otbGenericExceptionMacro(MissingMetadataException, "Invalid PNEO Sensor ID")
   }
 }
 
-
-void PleiadesNeoImageMetadataInterface::FetchSolarIrradiance(const std::vector<double> & dimapSolarIrradiance, ImageMetadata& imd)
-{
-  std::unordered_map<std::string, double> defaultSolarIrradiance;
-
-  const auto & sensorID = imd[MDStr::SensorID];
-
-  otbGenericExceptionMacro(MissingMetadataException,<< "Invalid metadata, bad sensor id")
-
-  // tolerance threshold
-  double tolerance = 0.05;
-
-  auto solarIrradianceIt = dimapSolarIrradiance.begin();
-  for (auto & band : imd.Bands)
-  {
-    auto defaultValue = defaultSolarIrradiance.find(band[MDStr::BandName]);
-    if (defaultValue != defaultSolarIrradiance.end() &&
-         std::abs(*solarIrradianceIt - defaultValue->second) > (tolerance * defaultValue->second))
-    {
-      band.Add(MDNum::SolarIrradiance, defaultValue->second);
-    }
-    else
-    {
-      band.Add(MDNum::SolarIrradiance, *solarIrradianceIt);
-    }
-    solarIrradianceIt++;
-  }
-
-}
-
-void PleiadesNeoImageMetadataInterface::FetchSpectralSensitivity(const std::string & sensorId, ImageMetadata& imd)
-{
-  otbGenericExceptionMacro(MissingMetadataException, "No Spectral sensitivity data for the PNEO sensor")
-}
-
-void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata &imd)
+void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata& imd)
 {
   DimapMetadataHelper helper;
 
   // Satellite ID is either PHR 1A or PHR 1B
   // Product read by the TIFF/JP2 GDAL driver
-  if (m_MetadataSupplierInterface->GetAs<std::string>("", "IMAGERY/SATELLITEID").find("NEO") != std::string::npos)
+  if (m_MetadataSupplierInterface->GetAs<std::string>("", "IMAGERY/SATELLITEID").find("PNEO") != std::string::npos)
   {
     // The driver stored the content of the Dimap XML file as metadatas in the IMD domain.
     helper.ParseDimapV3(*m_MetadataSupplierInterface, "IMD/");
@@ -163,14 +128,14 @@ void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata &imd)
     // fill RPC model
     if (imd[MDStr::GeometricLevel] == "SENSOR")
     {
-      FetchRPC(imd, -0.5, -0.5);
+      FetchRPC(imd);
     }
   }
   // Product read by the DIMAP GDAL driver
-  else if (m_MetadataSupplierInterface->GetAs<std::string> ("","MISSION") == "PHRNEO")
+  else if (m_MetadataSupplierInterface->GetAs<std::string>("", "MISSION") == "PNEO")
   {
     // The DIMAP driver does not read the same metadata as the TIFF/JP2 one, and
-    // some required metadata are missing. 
+    // some required metadata are missing.
     // The XML Dimap file is read again and provided to the DimapMetadataHelper
     // using a XMLMetadataSupplier
     XMLMetadataSupplier xmlMds(m_MetadataSupplierInterface->GetResourceFile());
@@ -182,7 +147,7 @@ void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata &imd)
     // fill RPC model
     if (imd[MDStr::GeometricLevel] == "SENSOR")
     {
-      FetchRPC(imd, -0.5, -0.5);
+      FetchRPC(imd);
     }
   }
   // Geom case
@@ -194,24 +159,24 @@ void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata &imd)
   }
   else
   {
-    otbGenericExceptionMacro(MissingMetadataException,<<"Sensor ID doesn't start with NEO")
+    otbGenericExceptionMacro(MissingMetadataException, << "Sensor ID doesn't start with NEO")
   }
 
-  const auto & dimapData = helper.GetDimapData();
+  const auto& dimapData = helper.GetDimapData();
 
-  imd.Add(MDStr::SensorID, dimapData.mission + " " +dimapData.missionIndex);
-  imd.Add(MDStr::Mission, "Pléiades NEO");
+  imd.Add(MDStr::SensorID, dimapData.mission + " " + dimapData.missionIndex);
+  imd.Add(MDStr::Mission, "PNEO");
 
   imd.Add(MDStr::Instrument, dimapData.Instrument);
   imd.Add(MDStr::InstrumentIndex, dimapData.InstrumentIndex);
 
   if (dimapData.BandIDs.size() == imd.Bands.size())
   {
-    const std::unordered_map<std::string, std::string> bandNameToEnhancedBandName =
-      {{"P", "PAN"}, {"B5", "Deep Blue"}, {"B1", "Blue"}, {"B2", "Green"}, {"B3", "Red"}, {"B6", "Red edge"}, {"B4", "NIR"} };
+    const std::unordered_map<std::string, std::string> bandNameToEnhancedBandName = {{"P", "P"},  {"DB", "B5"}, {"B", "B1"},  {"G", "B2"},
+                                                                                     {"R", "B3"}, {"RE", "B6"}, {"NIR", "B4"}};
 
     auto bandId = dimapData.BandIDs.begin();
-    for (auto & band: imd.Bands)
+    for (auto& band : imd.Bands)
     {
       band.Add(MDStr::BandName, *bandId);
       auto it = bandNameToEnhancedBandName.find(*bandId);
@@ -228,47 +193,41 @@ void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata &imd)
   }
   else
   {
-    otbGenericExceptionMacro(MissingMetadataException,
-      << "The number of bands in image metadatas is incoherent with the DIMAP product")
+    otbGenericExceptionMacro(MissingMetadataException, << "The number of bands in image metadatas is incoherent with the DIMAP product")
   }
 
-  //Sun elevation and azimuth should be taken from the center of the image , [0] is Top Center, [1] is Center, [2] is Bottom Center
-  //This is the same for Viewing angle, it is taken from the center of the image (see FetchSatAngles)
+  // Sun elevation and azimuth should be taken from the center of the image , [0] is Top Center, [1] is Center, [2] is Bottom Center
+  // This is the same for Viewing angle, it is taken from the center of the image (see FetchSatAngles)
   imd.Add(MDNum::SunAzimuth, dimapData.SunAzimuth[1]);
   imd.Add(MDNum::SunElevation, dimapData.SunElevation[1]);
 
-  FetchSatAngles(dimapData.IncidenceAngle, dimapData.AlongTrackIncidenceAngle,
-                 dimapData.AcrossTrackIncidenceAngle, dimapData.SceneOrientation,
-                 imd);
+  FetchSatAngles(dimapData.IncidenceAngle, dimapData.AlongTrackIncidenceAngle, dimapData.AcrossTrackIncidenceAngle, dimapData.SceneOrientation, imd);
 
-  imd.Add(MDTime::ProductionDate,
-    MetaData::ReadFormattedDate(dimapData.ProductionDate));
-  imd.Add(MDTime::AcquisitionDate,
-    MetaData::ReadFormattedDate(dimapData.AcquisitionDate));
+  imd.Add(MDTime::ProductionDate, MetaData::ReadFormattedDate(dimapData.ProductionDate));
+  imd.Add(MDTime::AcquisitionDate, MetaData::ReadFormattedDate(dimapData.AcquisitionDate));
 
-  FetchSolarIrradiance(dimapData.SolarIrradiance, imd);
-
-  //Store gain values from the dimap, if present
-  if (dimapData.PhysicalGain.size() == imd.Bands.size())
+  // Store gain values from the dimap, if present
+  if (dimapData.PhysicalGain.size() == imd.Bands.size() && dimapData.SolarIrradiance.size() == imd.Bands.size())
   {
+    auto solarIrradianceIt = dimapData.SolarIrradiance.begin();
     auto gain = dimapData.PhysicalGain.begin();
-    for (auto & band: imd.Bands)
+    for (auto& band : imd.Bands)
     {
       band.Add(MDNum::PhysicalGain, *gain);
-      gain++;
+      band.Add(MDNum::SolarIrradiance,*solarIrradianceIt);
+      ++solarIrradianceIt;
+      ++gain;
     }
   }
   else
   {
-    //Store hard-coded values for gain
-    FetchTabulatedPhysicalGain(imd);
-    otbLogMacro(Info, << "Gain values from DIMAP could not be retrieved, reading hard-coded tables instead");
+    otbGenericExceptionMacro(MissingMetadataException, << "Gain values from DIMAP could not be retrieved")
   }
 
   if (dimapData.PhysicalBias.size() == imd.Bands.size())
   {
     auto bias = dimapData.PhysicalBias.begin();
-    for (auto & band: imd.Bands)
+    for (auto& band : imd.Bands)
     {
       band.Add(MDNum::PhysicalBias, *bias);
       bias++;
@@ -276,20 +235,19 @@ void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata &imd)
   }
   else
   {
-    //Default Bias value
-    for (auto & band: imd.Bands)
+    // Default Bias value
+    for (auto& band : imd.Bands)
     {
       band.Add(MDNum::PhysicalBias, 0.0);
     }
-    FetchSpectralSensitivity(imd[MDStr::SensorID], imd);
-    otbLogMacro(Info, << "Bias values from DIMAP could not be retrieved, default values not available");
+    otbGenericExceptionMacro(MissingMetadataException, << "Bias values from DIMAP could not be retrieved");
   }
 
   imd.Add(MetaData::PleiadesNeoUtils::IMAGE_ID_KEY, dimapData.ImageID);
 
   if (imd[MDStr::GeometricLevel] == "SENSOR")
   {
-    /** These metadata are specific to PHR sensor products, and therefore as stored 
+    /** These metadata are specific to PHR sensor products, and therefore as stored
     as extra string keys in the metadata dictionary */
     imd.Add(MetaData::PleiadesNeoUtils::TIME_RANGE_START_KEY, dimapData.TimeRangeStart);
     imd.Add(MetaData::PleiadesNeoUtils::TIME_RANGE_END_KEY, dimapData.TimeRangeEnd);
@@ -298,7 +256,7 @@ void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata &imd)
     imd.Add(MetaData::PleiadesNeoUtils::SWATH_LAST_COL_KEY, dimapData.SwathLastCol);
   }
 
-  // Default display  
+  // Default display
   // Panchromatic case
   if (imd.Bands.size() == 1)
   {
@@ -312,38 +270,37 @@ void PleiadesNeoImageMetadataInterface::Parse(ImageMetadata &imd)
     imd.Add(MDNum::DeepBlueDisplayChannel, 0);
     imd.Add(MDNum::BlueDisplayChannel, 1);
     imd.Add(MDNum::GreenDisplayChannel, 2);
-    imd.Add(MDNum::DeepBlueDisplayChannel, 3);
+    imd.Add(MDNum::RedDisplayChannel, 3);
   }
+
+  // add LUTs
+  FetchSpectralSensitivity(imd[MDStr::SensorID], imd, helper);
 }
 
 namespace MetaData
 {
 namespace PleiadesNeoUtils
 {
-  bool HasSensorModelCharacteristics(const ImageMetadata & imd)
-  {
-    return imd.Has(IMAGE_ID_KEY)
-        && imd.Has(TIME_RANGE_START_KEY)
-        && imd.Has(TIME_RANGE_END_KEY)
-        && imd.Has(LINE_PERIOD_KEY)
-        && imd.Has(SWATH_FIRST_COL_KEY)
-        && imd.Has(SWATH_LAST_COL_KEY);
-  }
+bool HasSensorModelCharacteristics(const ImageMetadata& imd)
+{
+  return imd.Has(IMAGE_ID_KEY) && imd.Has(TIME_RANGE_START_KEY) && imd.Has(TIME_RANGE_END_KEY) && imd.Has(LINE_PERIOD_KEY) && imd.Has(SWATH_FIRST_COL_KEY) &&
+         imd.Has(SWATH_LAST_COL_KEY);
+}
 
-  SensorModelCharacteristics GetSensorModelCharacteristics(const ImageMetadata & imd)
-  {
-    SensorModelCharacteristics output;
+SensorModelCharacteristics GetSensorModelCharacteristics(const ImageMetadata& imd)
+{
+  SensorModelCharacteristics output;
 
-    output.imageID = imd[IMAGE_ID_KEY];
-    output.timeRangeStart = ReadFormattedDate(imd[TIME_RANGE_START_KEY]);
-    output.timeRangeEnd = ReadFormattedDate(imd[TIME_RANGE_END_KEY]);
-    output.linePeriod = std::stod(imd[LINE_PERIOD_KEY]);
-    output.swathFirstCol = std::stoi(imd[SWATH_FIRST_COL_KEY]);
-    output.swathLastCol = std::stoi(imd[SWATH_LAST_COL_KEY]);
+  output.imageID        = imd[IMAGE_ID_KEY];
+  output.timeRangeStart = ReadFormattedDate(imd[TIME_RANGE_START_KEY]);
+  output.timeRangeEnd   = ReadFormattedDate(imd[TIME_RANGE_END_KEY]);
+  output.linePeriod     = std::stod(imd[LINE_PERIOD_KEY]);
+  output.swathFirstCol  = std::stoi(imd[SWATH_FIRST_COL_KEY]);
+  output.swathLastCol   = std::stoi(imd[SWATH_LAST_COL_KEY]);
 
-    return output;
-  }
+  return output;
+}
 
-} // end namespace PleiadeNeoUtils
+} // end namespace PleiadesNeoUtils
 } // end namespace MetaData
 } // end namespace otb
