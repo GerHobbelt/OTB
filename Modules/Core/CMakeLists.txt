@@ -1,3 +1,23 @@
+#
+# Copyright (C) 2005-2026 Centre National d'Etudes Spatiales (CNES)
+#
+# This file is part of Orfeo Toolbox
+#
+#     https://www.orfeo-toolbox.org/
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 set(otb-group "Core")
 
 # OTBBoostAdapter needs only Thirdparty/Boost
@@ -74,12 +94,8 @@ add_subdirectory(IO/TestKernel)
 # OTBPansharpening needs OTBStatistics
 add_subdirectory(PanSharpening)
 
-
-
-if (OTB_USE_LIBKML)
-    add_subdirectory(IO/IOKML)
-    add_subdirectory(IO/KMZWriter)
-endif()
+add_subdirectory(IO/IOKML)
+add_subdirectory(IO/KMZWriter)
 
 add_subdirectory(IO/IOXML)
 add_subdirectory(IO/VectorDataIO)
@@ -121,9 +137,40 @@ install(FILES ${CMAKE_BINARY_DIR}/CMakeFiles/${otb-group}Config.cmake
         COMPONENT ${otb-group})
 
 if (CMAKE_DEBUG)
-    message(STATUS "[CMAKE_DEBUG] Generating ${otb-group}Config.cmake for component \"${otb-group}\" that will be installed in \"${OTB_INSTALL_PACKAGE_DIR}\"")
+    message(STATUS "[CMAKE_DEBUG] ${otb-group}Config.cmake generated for component \"${otb-group}\" that will be installed in \"${OTB_INSTALL_PACKAGE_DIR}\"")
 endif()
 
+
+# /!\ UGLY FIX, DO NOT TRY THIS AT HOME /!\
+# Read the test folder of Core modules ONLY AFTER READING ALL MODULES DIRS.
+# When reading the module directories, we create file OTB<ModuleName>.cmake used
+# by intern mecanism to resolve dependency (in otb_module_impl)
+# THIS IS A NASTY FIX needed to make tests works as THERE IS CYCLIC DEPENDENCIES
+# FOR CORE TESTS. Thus it need some the OTB<ModuleName>.cmake files that are
+# not already made (but only for test).
+# E.G. OTBCommon tests needs OTBTestKernel, which needs... OTBCommon!! Yeeeeh!!
+#
+# WHEN THIS CODE IS CLEANED, also remove the if (component != Core) that
+# does not read tests when we use the Core module
+# in otb_module_impl in OTBModuleMacro. Do the same for the Remote Cmakelists!
+#
+# Instead of Nasty solution, if we have time, we can use solutions proposed at
+# https://gitlab.orfeo-toolbox.org/orfeotoolbox/otb/-/issues/2530#note_118810
+
+# First read all otb-modules files of Core
+if (BUILD_TESTING)
+    # part of this code was in OTBModuleEnablement
+    # match all otb-module.cmake files in Core and its subdirs.
+    file( GLOB_RECURSE _core_modules_files RELATIVE "${OTB_SOURCE_DIR}" ${CMAKE_CURRENT_SOURCE_DIR}/*/otb-module.cmake )
+    foreach(_module_file ${_core_modules_files})
+        # get parent directory
+        get_filename_component(_module_dir ${_module_file} DIRECTORY)
+        # check if tests exists and build them
+        if (EXISTS "${OTB_SOURCE_DIR}/${_module_dir}/test/CMakeLists.txt")
+            add_subdirectory(${OTB_SOURCE_DIR}/${_module_dir}/test)
+        endif()
+    endforeach()
+endif()
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/PackageConfig.cmake)
 unset(otb-group)
