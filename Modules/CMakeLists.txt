@@ -18,18 +18,4 @@
 # limitations under the License.
 #
 
-set(DOCUMENTATION "This module imports Curl to the build system")
-
-
-# set(OTBCurl_LIBRARIES ${CURL_LIBRARY_RELEASE})
-
-
-otb_module(OTBCurl
-  DEPENDS
-    
-  TEST_DEPENDS
-    
-  DESCRIPTION
-    "${DOCUMENTATION}"
-  )
-
+include("OTBInternalModules.cmake")

@@ -196,7 +196,7 @@ macro(otb_module_impl)
     include_directories(${${otb-module}_INCLUDE_DIRS})
   endif()
   if(${otb-module}_SYSTEM_INCLUDE_DIRS)
-    include_directories(${${otb-module}_SYSTEM_INCLUDE_DIRS})
+    include_directories(SYSTEM ${${otb-module}_SYSTEM_INCLUDE_DIRS})
   endif()
 
   if(${otb-module}_SYSTEM_LIBRARY_DIRS)
@@ -262,46 +262,23 @@ macro(otb_module_impl)
     endif()
   endif()
 
-  set(otb-module-EXPORT_CODE-build "${${otb-module}_EXPORT_CODE_BUILD}")
-  set(otb-module-EXPORT_CODE-install "${${otb-module}_EXPORT_CODE_INSTALL}")
-
-  set(otb-module-DEPENDS "${OTB_MODULE_${otb-module}_DEPENDS}")
-  foreach(dep IN LISTS OTB_MODULE_${otb-module}_OPTIONAL_DEPENDS)
-    if (${dep}_ENABLED)
-      list(APPEND otb-module-DEPENDS ${dep})
-    endif()
-  endforeach()
-  set(otb-module-LIBRARIES "${${otb-module}_LIBRARIES}")
-  set(otb-module-INCLUDE_DIRS-build "${${otb-module}_INCLUDE_DIRS}")
-  # As Group can be separated and installed to different places, ensure
-  # that includes and library path are not relative to OTB but to Group
-  # location
-  # here use ${GROUP_${__current_component}_LOCATION} that will be init
-  # when reading the <GROUP>Config.cmake file to the root of the Group
-  set(otb-module-INCLUDE_DIRS-install "\${GROUP_${__current_component}_LOCATION}/${${otb-module}_INSTALL_INCLUDE_DIR}")
-  if(${otb-module}_SYSTEM_INCLUDE_DIRS)
-    list(APPEND otb-module-INCLUDE_DIRS-build "${${otb-module}_SYSTEM_INCLUDE_DIRS}")
-    list(APPEND otb-module-INCLUDE_DIRS-install "${${otb-module}_SYSTEM_INCLUDE_DIRS}")
-  endif()
-  set(otb-module-LIBRARY_DIRS "${${otb-module}_SYSTEM_LIBRARY_DIRS}")
-  # add system lib dir if it exists
-  if (${GROUP_${__current_component}_LOCATION})
-    list(APPEND otb-module-LIBRARY_DIRS "\${GROUP_${__current_component}_LOCATION}/lib")
-  endif()
-  set(otb-module-INCLUDE_DIRS "${otb-module-INCLUDE_DIRS-build}")
-  set(otb-module-EXPORT_CODE "${otb-module-EXPORT_CODE-build}")
-  # create a file with variables for build
-  configure_file(${_OTBModuleMacros_DIR}/OTBModuleInfo.cmake.in "${OTB_BINARY_DIR}/${OTB_INSTALL_PACKAGE_DIR}/Modules/${otb-module}.cmake" @ONLY)
-  set(otb-module-INCLUDE_DIRS "${otb-module-INCLUDE_DIRS-install}")
-  set(otb-module-EXPORT_CODE "${otb-module-EXPORT_CODE-install}")
-  # then for install
-  configure_file(${_OTBModuleMacros_DIR}/OTBModuleInfo.cmake.in CMakeFiles/${otb-module}.cmake @ONLY)
-  install(FILES
-    ${${otb-module}_BINARY_DIR}/CMakeFiles/${otb-module}.cmake
-    DESTINATION ${OTB_INSTALL_PACKAGE_DIR}/Modules
-    COMPONENT ${__current_component}
-  )
-
+  # message(STATUS "OTB_DIR == ${_OTBModuleMacros_DIR}")
+  # DO NOT QUOTE LISTS as they already are interpreted as multi var args
+  # quoting them will "cancel" the list effect and malform the generated
+  # files
+  generate_cmake_module_configs("${otb-module}" "${_OTBModuleMacros_DIR}"
+      COMPONENT "${__current_component}"
+      DEPENDS ${OTB_MODULE_${otb-module}_DEPENDS}
+      OPTIONAL_DEPENDS ${OTB_MODULE_${otb-module}_OPTIONAL_DEPENDS}
+      LIBRARIES ${${otb-module}_LIBRARIES}
+      LIBRARY_DIRS "\${GROUP_${__current_component}_LOCATION}/lib"
+      SYSTEM_LIBRARY_DIRS ${${otb-module}_SYSTEM_LIBRARY_DIRS}
+      INCLUDE_DIRS_BUILD ${${otb-module}_INCLUDE_DIRS}
+      INCLUDE_DIRS_INSTALL "\${GROUP_${__current_component}_LOCATION}/${${otb-module}_INSTALL_INCLUDE_DIR}"
+      SYSTEM_INCLUDE_DIRS ${${otb-module}_SYSTEM_INCLUDE_DIRS}
+      EXPORT_CODE_BUILD "${${otb-module}_EXPORT_CODE_BUILD}"
+      EXPORT_CODE_INSTALL "${${otb-module}_EXPORT_CODE_INSTALL}"
+      )
   # construct a list of the MODULES dependencies. It will help later in
   # <MODULE>Config.cmake file to scan the correct module dependencies before
   # the module targets
@@ -325,7 +302,9 @@ macro(otb_module_impl)
   set_property(GLOBAL PROPERTY ${__current_component}_MOD_DEPS
                                ${MODULE_DEPENDS_OF_COMPONENT})
 
-  if (NOT ${${otb-module}-targets}_EXPORTED)
+  get_property(_is_target_exported GLOBAL PROPERTY ${${otb-module}-targets}_EXPORTED)
+  # check if _is_target_exported is unset or FALSE
+  if (NOT DEFINED _is_target_exported OR NOT _is_target_exported)
     if (CMAKE_DEBUG)
       message(STATUS "[CMAKE_DEBUG] Exporting target ${${otb-module}-targets} part of component ${__current_component} in file ${__current_component}Targets.cmake located at ${OTB_INSTALL_PACKAGE_DIR}")
     endif()
@@ -333,8 +312,7 @@ macro(otb_module_impl)
             FILE ${__current_component}Targets.cmake
             DESTINATION ${OTB_INSTALL_PACKAGE_DIR}
             COMPONENT ${__current_component})
-    # define variable in cmake CACHE to make it global
-    set(${${otb-module}-targets}_EXPORTED 1 CACHE INTERNAL "Bool to not declare multiple times ${${otb-module}-targets}.cmake file" FORCE)
+    set_property(GLOBAL PROPERTY ${${otb-module}-targets}_EXPORTED TRUE)
   endif() # NOT DEFINED ${${otb-module}-targets}_EXPORTED
   otb_module_doxygen(${otb-module})   # module name
   unset(__current_component)
@@ -343,6 +321,7 @@ endmacro()
 macro(otb_module_test)
   include(../otb-module.cmake) # Load module meta-data
   set(${otb-module-test}_LIBRARIES "")
+  # Call include and library directories for each DEPENDS
   otb_module_use(${OTB_MODULE_${otb-module-test}_DEPENDS})
   foreach(dep IN LISTS OTB_MODULE_${otb-module-test}_DEPENDS)
     list(APPEND ${otb-module-test}_LIBRARIES "${${dep}_LIBRARIES}")
@@ -375,6 +354,7 @@ macro(otb_module_target_label _target_name)
   if(otb-module)
     set(_label ${otb-module})
     if(TARGET ${otb-module}-all)
+      # with this the "ALL" target is build after _target_name
       add_dependencies(${otb-module}-all ${_target_name})
     endif()
   else()
