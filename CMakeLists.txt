@@ -127,9 +127,7 @@ string(TIMESTAMP OTB_BUILD_TIMESTAMP)
 
 # init all OTB_INSTALL const var
 get_install_const()
-if(NOT OTB_INSTALL_PYTHON_DIR)
-  set(OTB_INSTALL_PYTHON_DIR "${OTB_INSTALL_LIBRARY_DIR}/otb/python")
-endif()
+get_modules_const()
 
 #convert path to native for reconfiguring otbcli.ps1.in
 file(TO_NATIVE_PATH "${OTB_INSTALL_APP_DIR}" OTB_INSTALL_APP_DIR_NATIVE)
@@ -673,6 +671,11 @@ foreach(otb-group IN LISTS GROUPS_ENABLED)
   install(FILES ${OTB_BINARY_DIR}/CMakeFiles/${otb-group}Config.cmake
           DESTINATION ${OTB_INSTALL_PACKAGE_DIR}
           COMPONENT ${otb-group})
+
+  if (CMAKE_DEBUG)
+    message(STATUS "[CMAKE_DEBUG] Generating ${otb-group}Config.cmake for component \"${otb-group}\" that will be installed in \"${OTB_INSTALL_PACKAGE_DIR}\"")
+  endif()
+
   unset(__ENABLED_MODULES)
 endforeach() # otb-group IN GROUPS_ENABLED
 

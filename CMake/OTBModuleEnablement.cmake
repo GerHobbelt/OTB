@@ -142,6 +142,10 @@ foreach( _group ${enabled_groups_list} )
     include(${OTB_SOURCE_DIR}/${_module_file})
     list(APPEND OTB_MODULES_ALL ${otb-module})
     get_filename_component(${otb-module}_BASE ${_module_file} DIRECTORY)
+    # NOTE TLA: "dangerous" behavior here are we are using variables here
+    # but declared by the "project()" command. Thus if we read the CMakeLists
+    # of module, these variables will be overriten (if the project name)
+    # have the same name as otb-module
     set(${otb-module}_SOURCE_DIR ${OTB_SOURCE_DIR}/${${otb-module}_BASE})
     set(${otb-module}_BINARY_DIR ${OTB_BINARY_DIR}/${${otb-module}_BASE})
 
@@ -226,7 +230,7 @@ foreach(otb-module ${OTB_MODULES_ALL})
 endforeach()
 
 # Mark modules enabled if:
-# - Module_<module-name> option is ON
+# - Module_<module-name> option is ON (like in remotes modules)
 # - OTB_BUILD_DEFAULT_MODULES is ON and module not excluded from default
 # - the module is requested by a specific group
 foreach(otb-module ${OTB_MODULES_ALL})
@@ -245,6 +249,8 @@ foreach(otb-module ${OTB_MODULES_ALL})
 endforeach()
 
 # Disable module having activation option to OFF
+# the ACTIVATION_OPTION var is managed by otb_module_activation_option
+# in OTBModuleMacros.cmake
 foreach(otb-module ${OTB_MODULES_ALL})
   if(OTB_MODULE_${otb-module}_ACTIVATION_OPTION
      AND NOT ${OTB_MODULE_${otb-module}_ACTIVATION_OPTION})

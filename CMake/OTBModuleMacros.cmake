@@ -75,9 +75,6 @@ macro(otb_module _name)
     elseif("${arg}" MATCHES "^DEPRECATED$")
       set(_doing "")
       set(OTB_MODULE_${otb-module}_IS_DEPRECATED 1)
-    elseif("${arg}" MATCHES "^[A-Z][A-Z][A-Z]$")
-      set(_doing "")
-      message(AUTHOR_WARNING "Unknown argument [${arg}]")
     elseif("${_doing}" MATCHES "^DEPENDS$")
       list(APPEND OTB_MODULE_${otb-module}_DEPENDS "${arg}")
     elseif("${_doing}" MATCHES "^OPTIONAL_DEPENDS$")
@@ -100,21 +97,6 @@ macro(otb_module _name)
   list(SORT OTB_MODULE_${otb-module}_DEPENDS) # Deterministic order.
   list(SORT OTB_MODULE_${otb-module}_OPTIONAL_DEPENDS) # Deterministic order.
   list(SORT OTB_MODULE_${otb-module-test}_DEPENDS) # Deterministic order.
-endmacro()
-
-set(OTB_MODULE_ACTIVATION_OPTION_LIST "")
-macro(otb_module_activation_option _option_desc _default)
-  string(REGEX REPLACE "OTB(.*)" "OTB_USE_\\1" _option_name ${otb-module})
-  string(TOUPPER ${_option_name} _option_name)
-  option(${_option_name} ${_option_desc} ${_default})
-  set(OTB_MODULE_${otb-module}_ACTIVATION_OPTION ${_option_name})
-  list(APPEND OTB_MODULE_ACTIVATION_OPTION_LIST ${_option_name})
-endmacro()
-
-macro(otb_module_check_name _name)
-  if( NOT "${_name}" MATCHES "^[a-zA-Z][a-zA-Z0-9]*$")
-    message(FATAL_ERROR "Invalid module name: ${_name}")
-  endif()
 endmacro()
 
 macro(otb_module_impl)
@@ -250,15 +232,22 @@ macro(otb_module_impl)
       COMPONENT ${__current_component}
       )
 
-    if (BUILD_SHARED_LIBS)
+    # Do not export this shared lib ELF symbols if USE_COMPILER_HIDDEN_VISIBILITY
+    # is true.
+    # Doing this will affect projects linking to this library that need to know
+    # symbols.
+    # If you do this, ensure the C++ symbols is set in the code
+    # (See https://gcc.gnu.org/wiki/Visibility)
+    if (BUILD_SHARED_LIBS AND USE_COMPILER_HIDDEN_VISIBILITY)
       # export flags are only added when building shared libs, they cause
       # mismatched visibility warnings when building statically.
-      if (USE_COMPILER_HIDDEN_VISIBILITY)
-        # Prefer to use target properties supported by newer cmake
-        set_target_properties(${otb-module} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-        set_target_properties(${otb-module} PROPERTIES C_VISIBILITY_PRESET hidden)
-        set_target_properties(${otb-module} PROPERTIES VISIBILITY_INLINES_HIDDEN 1)
+      if (CMAKE_DEBUG)
+        message(STATUS "[CMAKE_DEBUG] ${otb-module} will have CXX_VISIBILITY_PRESET and VISIBILITY_INLINES_HIDDEN Properties to hidden")
       endif()
+      # Prefer to use target properties supported by newer cmake
+      set_target_properties(${otb-module} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+      set_target_properties(${otb-module} PROPERTIES C_VISIBILITY_PRESET hidden)
+      set_target_properties(${otb-module} PROPERTIES VISIBILITY_INLINES_HIDDEN 1)
     endif()
   endif()
 
@@ -330,19 +319,6 @@ macro(otb_module_test)
   foreach(dep IN LISTS OTB_MODULE_${otb-module}_OPTIONAL_DEPENDS)
     if (${dep}_ENABLED)
       list(APPEND ${otb-module-test}_LIBRARIES "${${dep}_LIBRARIES}")
-    endif()
-  endforeach()
-endmacro()
-
-macro(otb_module_warnings_disable)
-  foreach(lang ${ARGN})
-    if(MSVC)
-      string(REGEX REPLACE "(^| )[/-]W[0-4]( |$)" " "
-        CMAKE_${lang}_FLAGS "${CMAKE_${lang}_FLAGS} -w")
-    elseif(BORLAND)
-      set(CMAKE_${lang}_FLAGS "${CMAKE_${lang}_FLAGS} -w-")
-    else()
-      set(CMAKE_${lang}_FLAGS "${CMAKE_${lang}_FLAGS} -w")
     endif()
   endforeach()
 endmacro()

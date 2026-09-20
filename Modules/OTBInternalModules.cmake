@@ -26,23 +26,35 @@
 list(APPEND otb_internal_modules
     "Miscellaneous"
     "FeaturesExtraction"
-    "Learning")
+    "Learning"
+    "SAR"
+    "Segmentation"
+    "Hyperspectral")
 
 list(APPEND otb_internal_modules_repos
     "https://gitlab.orfeo-toolbox.org/orfeotoolbox/otb-modules/miscellaneous.git"
     "https://gitlab.orfeo-toolbox.org/orfeotoolbox/otb-modules/featuresextraction.git"
-    "https://gitlab.orfeo-toolbox.org/orfeotoolbox/otb-modules/learning.git")
+    "https://gitlab.orfeo-toolbox.org/orfeotoolbox/otb-modules/learning.git"
+    "https://gitlab.orfeo-toolbox.org/orfeotoolbox/otb-modules/sar.git"
+    "https://gitlab.orfeo-toolbox.org/orfeotoolbox/otb-modules/segmentation.git"
+    "https://gitlab.orfeo-toolbox.org/orfeotoolbox/otb-modules/hyperspectral.git")
 
 list(APPEND otb_internal_modules_git_tag
     "main" # Miscellaneous
     "main" # FeaturesExtraction
-    "init_P0_module" # Learning
+    "main" # Learning
+    "main" # SAR
+    "main" # Segmentation
+    "init_P0_module" # Hyperspectral
     )
 
 list(APPEND otb_internal_modules_get_submodules
      "OFF" # Miscellaneous 
      "OFF" # FeaturesExtraction
      "OFF" # Learning
+     "OFF" # SAR
+     "OFF" # Segmentation
+     "OFF" # Hyperspectral
     )
 
 list(APPEND otb_internal_modules_desc
@@ -55,6 +67,12 @@ models, as well as PROSAIL, which is the combination of the two previous ones." 
 "This module contains classical filtering applications, such as texture extraction, edge extraction, smoothing, morphological operations. This module relies on external libraries (MuParser / MuParserX) contained in OTB-Dependencies. it can be installed along with the Core package with a simple tar extract command and directly available after sourcing the otbenv.profile." # FeaturesExtraction
 
 "This module contains Machine Learning applications based on classical supervised or unsupervised algorithms (SVM, Random Forest, K-Means, Multi-layer Perceptron Neural Network, etc.). Its applications handle the whole processing chain : sample selection, learning, prediction and finalization of a classification map. It also contains a regression framework." # Learning
+
+"This module contains SAR (Synthetic Aperture Radar) applications and covers all the scope of SAR imagery manipulation : SAR Calibration, Unspeckle with temporal filtering, Interferogram, etc." # SAR
+
+"This group contains algorithms related to image segmentation" # Segmentation
+
+"This module contains specific applications to handle hyperspectral images : spectral angle classification, end member number estimation or unmixing." # Hyperspectral
 )
 
 set(__i 0) # group index
@@ -98,7 +116,7 @@ while(${__i} LESS ${__nb_internal_modules})
         list(GET otb_internal_modules_desc "${__i}" __otb_module_desc)
         list(GET otb_internal_modules_get_submodules "${__i}" __get_submodules)
 
-        message(STATUS "Downloading internal module ${__otb_module_name} at ${__location} with submodules at ${__get_submodules}")
+        message(STATUS "Downloading internal module ${__otb_module_name} at ${__location} with ref ${__otb_module_tag} and submodules at ${__get_submodules}")
         otb_fetch_module("${__otb_module_name}"
                          "${__otb_module_desc}"
                          ${__location}
