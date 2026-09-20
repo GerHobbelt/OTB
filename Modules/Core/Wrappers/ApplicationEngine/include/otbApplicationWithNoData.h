@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2025 Centre National d'Etudes Spatiales (CNES)
+ * Copyright (C) 2005-2026 Centre National d'Etudes Spatiales (CNES)
  *
  * This file is part of Orfeo Toolbox
  *
@@ -23,6 +23,7 @@
 
 #include "OTBApplicationEngineExport.h"
 #include "otbWrapperApplication.h"
+#include <sstream>
 
 namespace otb
 {
@@ -49,7 +50,7 @@ namespace Wrapper
  * \ingroup OTBApplicationEngine
  */
 template <typename TNoData, typename TApplication = Application>
-class OTBApplicationEngine_EXPORT ApplicationWithNoData : public TApplication
+class OTBApplicationEngine_EXPORT_TEMPLATE ApplicationWithNoData : public TApplication
 {
 protected:
   ApplicationWithNoData(
@@ -64,10 +65,10 @@ protected:
    */
   void DoInit_NoData()
   {
-    this->AddParameter<parameter_type_v<TNoData>>(
+    this->template AddParameter<parameter_type_v<TNoData>>(
         m_nodata_key,
         "NoData value",
-        "Ouput cells with no data are filled with this value (optional " + std::to_string(m_nodata_default_value)+" by default)"
+        "Ouput cells with no data are filled with this value (optional " + std::to_string(m_nodata_default_value) + " by default)"
     );
     parameter_type<TNoData>::set_default(
         *this,
@@ -103,7 +104,9 @@ protected:
       if (nodata_start != std::string::npos && nodata_start > extension_start)
       {
         // Let's trust the end-user. Even if the value doesn't match
-        otbLogMacro(Warning, <<"Trusting the nodata value required in extended filename. User specified " << nodata << " value won't be propagated in image metadata");
+        otbLogMacro(Warning,
+                    << "Trusting the nodata value required in extended filename. "
+                    << "User specified parameter -" << m_nodata_key << "=" << nodata << " won't be propagated to image metadata");
         return;
       }
     }
