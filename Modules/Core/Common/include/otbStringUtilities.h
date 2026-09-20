@@ -32,7 +32,6 @@
 #include <cctype>
 #include <cmath>
 #include <string>
-#include "OTBCommonExport.h"
 #include "otbMacro.h"
 
 namespace otb
@@ -55,7 +54,7 @@ namespace otb
  * though depending on the constructor used.
  * @todo deprecate once OTB drop C++14 compatibility
  */
-struct OTBCommon_EXPORT string_view
+struct string_view
 {
   using value_type      = char const;
   using reference       = char const&;
@@ -346,7 +345,7 @@ bool contains(string_view const& haystack, string_view const& needle)
  * @see `split_on()`
  */
 template <typename Splitter>
-struct OTBCommon_EXPORT part_iterator
+struct part_iterator
 {
   using reference         = string_view &;
   using const_reference   = string_view const&;
@@ -427,7 +426,7 @@ namespace details
  * @see `split_on()`
  */
 template <typename Splitter>
-struct OTBCommon_EXPORT part_range
+struct part_range
 {
   part_range(string_view const& global_string, Splitter s)
   : m_first(global_string, s)
