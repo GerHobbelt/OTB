@@ -86,6 +86,7 @@ include(PreventInBuildInstalls)
 include(OTBModuleMacros)
 include(OTBModuleRemote)
 include(OTBModuleTest)
+include(OTBOptions)
 
 repository_status(${PROJECT_SOURCE_DIR} OTB_GIT_STATUS_MESSAGE)
 
@@ -121,6 +122,10 @@ set(OTB_VERSION_STRING "${OTB_VERSION_MAJOR}.${OTB_VERSION_MINOR}.${OTB_VERSION_
 get_package_name(${OTB_SOURCE_DIR} ${PROJECT_NAME} OTB_VERSION_STRING2)
 
 include(OTBConstants)
+#-----------------------------------------------------------------------------
+# The subdirectories added below this line should use only the public
+# interface with find_package(ITK). Set ITK_DIR to use this ITK build.
+set(OTB_DIR "${OTB_BINARY_DIR}")
 
 #-----------------------------------------------------------------------------
 string(TIMESTAMP OTB_BUILD_TIMESTAMP)
@@ -282,9 +287,13 @@ set(OTB_EXAMPLE_DATA_ROOT "${OTB_SOURCE_DIR}/Examples/Data")
 # dependencies.
 add_subdirectory(Modules)
 add_subdirectory(Modules/Remote)
+# NOTE TLA: this should be refactored and put in a separate function
+# Add the QGIS Wrapper at the last minute as it need all the OTB application
+# to be declared
+add_subdirectory(Modules/Core/Wrappers/QGIS)
 
 # Enable modules according to user inputs and the module dependency DAG.
-include(OTBModuleEnablement)
+#include(OTBModuleEnablement)
 
 #----------------------------------------------------------------------
 # Generate OTBConfig.cmake for the build tree.
@@ -495,10 +504,6 @@ install(FILES ${CMAKE_BINARY_DIR}/README DESTINATION . COMPONENT Core)
 if(BUILD_TESTING)
   add_subdirectory(Utilities/InstallTest)
 endif()
-#-----------------------------------------------------------------------------
-# The subdirectories added below this line should use only the public
-# interface with find_package(ITK). Set ITK_DIR to use this ITK build.
-set(OTB_DIR "${OTB_BINARY_DIR}")
 
 if(BUILD_EXAMPLES)
   add_subdirectory(Examples)
@@ -561,8 +566,16 @@ if(OTB_DATA_GIT_STATUS_MESSAGE)
   message( ${OTB_DATA_GIT_STATUS_MESSAGE})
 endif()
 
-set(option_list ${OTB_MODULE_ACTIVATION_OPTION_LIST})
-list(SORT option_list)
+# get the list of all activable modules in activated groups
+set(__all_activable_modules "")
+get_property(__groups_enabled GLOBAL PROPERTY OTB_GROUPS_ENABLED)
+
+foreach(__group ${__groups_enabled})
+  get_property(__group_activable_modules GLOBAL PROPERTY ${__group}_MODULE_ACTIVATION_OPTION_LIST)
+  list(APPEND __all_activable_modules ${__group_activable_modules})
+endforeach()
+
+list(SORT __all_activable_modules)
 
 foreach(otb_option
     CMAKE_SOURCE_DIR
@@ -576,7 +589,7 @@ foreach(otb_option
     CMAKE_BUILD_TYPE
     CMAKE_C_FLAGS
     CMAKE_CXX_FLAGS
-    ${option_list}
+    ${__all_activable_modules}
     OTB_WRAP_PYTHON
     OTB_WRAP_QGIS
     OTB_DATA_ROOT
@@ -660,28 +673,12 @@ message("\nCMake ${CMAKE_VERSION} successfully configured ${PROJECT_NAME} using 
 
 message("======================= End of OTB cmake summary =======================")
 
-# create all needed config files here
-get_property(GROUPS_ENABLED GLOBAL PROPERTY OTB_GROUPS_ENABLED)
-foreach(otb-group IN LISTS GROUPS_ENABLED)
-  get_property(GROUP_DEPS GLOBAL PROPERTY ${otb-group}_MOD_DEPS)
-  # Get the list of enabled modules for this component. This list is created
-  # in OTBModuleEnablement.cmake
-  set(__ENABLED_MODULES ${OTB_${otb-group}_MODULES_ENABLED})
-  configure_file(CMake/GenericGroupConfig.cmake.in CMakeFiles/${otb-group}Config.cmake @ONLY)
-  install(FILES ${OTB_BINARY_DIR}/CMakeFiles/${otb-group}Config.cmake
-          DESTINATION ${OTB_INSTALL_PACKAGE_DIR}
-          COMPONENT ${otb-group})
-
-  if (CMAKE_DEBUG)
-    message(STATUS "[CMAKE_DEBUG] Generating ${otb-group}Config.cmake for component \"${otb-group}\" that will be installed in \"${OTB_INSTALL_PACKAGE_DIR}\"")
-  endif()
-
-  unset(__ENABLED_MODULES)
-endforeach() # otb-group IN GROUPS_ENABLED
-
 
 #don't need this one anymore. so unset it.
 unset(option_list)
 
 #----------------------------------------------------------------------------
-include(Packaging_OTB)
+# include(Packaging_OTB)
+
+
+

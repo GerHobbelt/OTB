@@ -31,5 +31,8 @@ otb_module(OTBCurl
     
   DESCRIPTION
     "${DOCUMENTATION}"
+  COMPONENT
+    Core
   )
 
+otb_module_activation_option("Enable curl based functionalities" ON)
